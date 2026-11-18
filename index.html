@@ -1,69 +1,13 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Coimbatore Vice City | Sector 1</title>
-  <link rel="stylesheet" href="/src/style.css" />
-</head>
-<body>
-  <div id="canvas-container"></div>
-  <div id="toast" class="toast">WELCOME TO COIMBATORE VICE CITY</div>
-
-  <div id="hud">
-    <div class="top-bar">
-      <div class="brand-box">
-        <div class="brand-title">Coimbatore Vice City</div>
-        <div class="sector-tag">TAMIL NADU MAP • SECTOR 1: CENTRAL COIMBATORE</div>
-        <div class="zone-indicator" id="zone-name">📍 Gandhipuram Central</div>
-      </div>
-
-      <div>
-        <div class="top-controls">
-          <button class="btn" id="btn-map">🗺️ City Map [M]</button>
-          <button class="btn" id="btn-mode">🚶 Exit Car [F]</button>
-          <button class="btn" id="btn-neon">🌆 Neon Night [N]</button>
-          <button class="btn" id="btn-race">🏁 Checkpoint Race [R]</button>
-          <button class="btn" id="btn-cam">🎥 Camera [C]</button>
-          <button class="btn" id="btn-fs">⛶ Fullscreen [P]</button>
-        </div>
-        <div class="stats-panel">
-          <div class="wanted-stars" id="wanted-display">☆☆☆☆☆</div>
-          <div class="speed-box">
-            <div class="speed-val" id="speed-val">0</div>
-            <div class="speed-unit" id="mode-label">KM/H • SPORTS COUPE</div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="bottom-bar">
-      <div class="minimap-wrap" id="minimap-click" title="Click or press M for Full Map">
-        <canvas id="minimap" width="220" height="220"></canvas>
-        <div class="minimap-hint">PRESS [M] FOR MAP</div>
-      </div>
-
-      <div class="controls-guide">
-        <div><span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span> or <span class="key">Arrows</span> Drive / Walk &nbsp;|&nbsp; <span class="key">Space</span> Drift / Brake</div>
-        <div><span class="key">F</span> Enter/Exit Vehicle &nbsp;|&nbsp; <span class="key">M</span> Coimbatore Map &nbsp;|&nbsp; <span class="key">P</span> Fullscreen &nbsp;|&nbsp; <span class="key">N</span> Day/Night</div>
-      </div>
-    </div>
-  </div>
-
-  <div id="map-overlay">
-    <div class="map-header">
-      <h2>Coimbatore City Map — Sector 1 (Central) & Tamil Nadu Expansion Grid</h2>
-      <button class="btn active" id="btn-close-map">Close Map [M / ESC]</button>
-    </div>
-    <canvas id="fullmap-canvas" width="960" height="620" aria-label="Coimbatore district map"></canvas>
-    <div class="map-legend">
-      <span>🔺 <b>You</b> (Live GPS)</span>
-      <span>🛣️ <b>Arterial Roads:</b> Avinashi Rd, Cross Cut Rd, Trichy Rd, Brooke Bond Rd</span>
-      <span>💧 <b>Ukkadam Periyakulam Lake</b></span>
-      <span>🔒 <b>Next Sectors:</b> Peelamedu • Race Course • Marudhamalai</span>
-    </div>
-  </div>
-
-  <script type="module" src="/src/main.js"></script>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>cbe</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
 </html>
