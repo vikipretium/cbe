@@ -4,15 +4,16 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 export class SceneManager {
   constructor(canvas) {
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x0b0f19);
+    this.scene.background = new THREE.Color(0x090d16);
+    this.scene.fog = new THREE.FogExp2(0x090d16, 0.0008);
 
     this.camera = new THREE.PerspectiveCamera(
       60,
       window.innerWidth / window.innerHeight,
-      0.1,
-      1000
+      1,
+      5000
     );
-    this.camera.position.set(6, 5, 8);
+    this.camera.position.set(0, 350, 450);
 
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     this.renderer.setSize(window.innerWidth, window.innerHeight);
@@ -20,20 +21,21 @@ export class SceneManager {
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
+    this.controls.maxPolarAngle = Math.PI / 2.1; // Keep camera above ground
 
     this.#setupEnvironment();
     this.#bindResize();
   }
 
   #setupEnvironment() {
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
     this.scene.add(ambientLight);
 
-    const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
-    dirLight.position.set(5, 10, 7);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.4);
+    dirLight.position.set(300, 600, 400);
     this.scene.add(dirLight);
 
-    const gridHelper = new THREE.GridHelper(20, 20, 0x334155, 0x1e293b);
+    const gridHelper = new THREE.GridHelper(2000, 50, 0x1e293b, 0x0f172a);
     this.scene.add(gridHelper);
   }
 

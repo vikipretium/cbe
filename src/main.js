@@ -1,23 +1,20 @@
 import './style.css';
-import * as THREE from 'three';
 import { SceneManager } from './world/SceneManager.js';
-import { SimEntity } from './entities/SimEntity.js';
+import { CoimbatoreMap } from './world/CoimbatoreMap.js';
 import { SimulationEngine } from './systems/SimulationEngine.js';
 import { ControlsUI } from './ui/ControlsUI.js';
+import * as THREE from 'three';
 
 const canvas = document.querySelector('#sim-canvas');
 const world = new SceneManager(canvas);
 const engine = new SimulationEngine();
 const ui = new ControlsUI(engine);
 
-// Spawn initial entity
-const starterCube = new SimEntity({
-  position: new THREE.Vector3(0, 0.5, 0),
-  color: 0x38bdf8,
+const cbeMap = new CoimbatoreMap(world.scene);
+cbeMap.loadArea(800).then(() => {
+  console.log(`Loaded ${cbeMap.roads.length} Coimbatore road segments.`);
 });
-engine.addEntity(starterCube, world.scene);
 
-// Main Loop
 const clock = new THREE.Clock();
 
 function animate() {
