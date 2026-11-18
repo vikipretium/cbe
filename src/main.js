@@ -1,6 +1,4 @@
 import * as THREE from 'three';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
 import { SECTOR_1_DATA } from './data/sectorCoimbatore.js';
 
 const container = document.querySelector('#canvas-container');
@@ -72,22 +70,80 @@ SECTOR_1_DATA.landmarks.forEach((landmark, index) => {
   scene.add(building);
 });
 
-const player = new THREE.Group();
-const body = new THREE.Mesh(
+const car = new THREE.Group();
+const carBody = new THREE.Mesh(
   new THREE.BoxGeometry(28, 12, 58),
-  new THREE.MeshStandardMaterial({ color: 0xf0b84c, metalness: 0.25, roughness: 0.35 })
+  new THREE.MeshStandardMaterial({ color: 0xf0b84c, metalness: 0.35, roughness: 0.28 })
 );
-body.position.y = 10;
-body.castShadow = true;
-player.add(body);
-const roof = new THREE.Mesh(
+carBody.position.y = 10;
+carBody.castShadow = true;
+car.add(carBody);
+
+const carRoof = new THREE.Mesh(
   new THREE.BoxGeometry(24, 10, 30),
-  new THREE.MeshStandardMaterial({ color: 0x1d2a35, metalness: 0.15 })
+  new THREE.MeshStandardMaterial({ color: 0x1d2a35, metalness: 0.2, roughness: 0.32 })
 );
-roof.position.set(0, 21, -4);
-player.add(roof);
-player.position.set(0, 0, 60);
-scene.add(player);
+carRoof.position.set(0, 21, -4);
+carRoof.castShadow = true;
+car.add(carRoof);
+
+const wheelMaterial = new THREE.MeshStandardMaterial({ color: 0x080b10, roughness: 0.8 });
+for (const x of [-15, 15]) {
+  for (const z of [-18, 18]) {
+    const wheel = new THREE.Mesh(new THREE.CylinderGeometry(6, 6, 5, 16), wheelMaterial);
+    wheel.rotation.z = Math.PI / 2;
+    wheel.position.set(x, 7, z);
+    wheel.castShadow = true;
+    car.add(wheel);
+  }
+}
+
+const headlightMaterial = new THREE.MeshBasicMaterial({ color: 0xf9edbd });
+for (const x of [-9, 9]) {
+  const headlight = new THREE.Mesh(new THREE.BoxGeometry(5, 3, 1), headlightMaterial);
+  headlight.position.set(x, 11, -30);
+  car.add(headlight);
+}
+
+const character = new THREE.Group();
+const skinMaterial = new THREE.MeshStandardMaterial({ color: 0xc89267, roughness: 0.75 });
+const shirtMaterial = new THREE.MeshStandardMaterial({ color: 0x36a6a8, roughness: 0.75 });
+const trouserMaterial = new THREE.MeshStandardMaterial({ color: 0x172333, roughness: 0.8 });
+
+const torso = new THREE.Mesh(new THREE.BoxGeometry(10, 16, 7), shirtMaterial);
+torso.position.y = 24;
+torso.castShadow = true;
+character.add(torso);
+
+const head = new THREE.Mesh(new THREE.SphereGeometry(5.5, 16, 12), skinMaterial);
+head.position.y = 38;
+head.castShadow = true;
+character.add(head);
+
+const leftLeg = new THREE.Mesh(new THREE.BoxGeometry(4, 15, 4), trouserMaterial);
+leftLeg.position.set(-3.2, 8, 0);
+leftLeg.castShadow = true;
+character.add(leftLeg);
+const rightLeg = leftLeg.clone();
+rightLeg.position.x = 3.2;
+character.add(rightLeg);
+
+for (const side of [-1, 1]) {
+  const arm = new THREE.Mesh(new THREE.BoxGeometry(3.5, 14, 4), skinMaterial);
+  arm.position.set(side * 7, 23, 0);
+  arm.rotation.z = side * -0.12;
+  arm.castShadow = true;
+  character.add(arm);
+}
+
+car.position.set(0, 0, 60);
+character.position.set(0, 0, 60);
+character.visible = false;
+scene.add(car);
+scene.add(character);
+
+let playerMode = 'car';
+let player = car;
 
 const minimap = document.querySelector('#minimap');
 const mapContext = minimap.getContext('2d');
@@ -145,99 +201,76 @@ function drawMinimap() {
   drawMap(mapContext, minimap.width, minimap.height, 0.16, player.position);
 }
 
-const realMapLocations = {
-  gandhipuram: [11.0178, 76.9664],
-  brookefields: [11.0093, 76.9717],
-  rspuram: [11.0101, 76.9504],
-  vocpark: [11.0030, 76.9770],
-  junction: [10.9972, 76.9585],
-  avinashi: [11.0244, 76.9921],
-  ukkadam: [10.9789, 76.9558]
-};
+const fullmapCanvas = document.querySelector('#fullmap-canvas');
+const fullmapContext = fullmapCanvas.getContext('2d');
 
-let realMap;
-let realPlayerMarker;
+function drawFullmap() {
+  const width = fullmapCanvas.width;
+  const height = fullmapCanvas.height;
+  const scale = 0.78;
 
-function initializeRealMap() {
-  if (realMap) return;
+  fullmapContext.fillStyle = '#091522';
+  fullmapContext.fillRect(0, 0, width, height);
 
-  realMap = L.map('fullmap-canvas', {
-    center: [10.9980, 76.9610],
-    zoom: 11,
-    zoomControl: true
-  });
+  fullmapContext.save();
+  fullmapContext.translate(width / 2 - player.position.x * scale, height / 2 - player.position.z * scale);
 
-  const cartoTileUrl = import.meta.env.VITE_CARTO_TILE_URL;
-  const cartoApiKey = import.meta.env.VITE_CARTO_API_KEY;
+  for (const road of SECTOR_1_DATA.roads) {
+    fullmapContext.strokeStyle = '#303e4c';
+    fullmapContext.lineWidth = road.width * scale;
+    fullmapContext.lineCap = 'round';
+    fullmapContext.beginPath();
+    fullmapContext.moveTo(road.x1 * scale, road.z1 * scale);
+    fullmapContext.lineTo(road.x2 * scale, road.z2 * scale);
+    fullmapContext.stroke();
 
-  if (cartoTileUrl) {
-    if (!cartoTileUrl.includes('{z}') || !cartoTileUrl.includes('{x}') || !cartoTileUrl.includes('{y}')) {
-      const warning = L.control({ position: 'topright' });
-      warning.onAdd = () => {
-        const element = L.DomUtil.create('div', 'leaflet-bar carto-config-warning');
-        element.innerHTML = 'CARTO URL needs {z}/{x}/{y} tile placeholders';
-        return element;
-      };
-      warning.addTo(realMap);
-    } else {
-      let tileUrl = cartoTileUrl;
-    if (tileUrl.includes('{api_key}')) {
-      tileUrl = tileUrl.replace('{api_key}', encodeURIComponent(cartoApiKey || ''));
-    } else if (cartoApiKey) {
-      const separator = tileUrl.includes('?') ? '&' : '?';
-      tileUrl = `${tileUrl}${separator}api_key=${encodeURIComponent(cartoApiKey)}`;
-    }
-
-      L.tileLayer(tileUrl, {
-        maxZoom: 20,
-        attribution: '&copy; CARTO &copy; OpenStreetMap contributors'
-      }).addTo(realMap);
-    }
-  } else {
-    const warning = L.control({ position: 'topright' });
-    warning.onAdd = () => {
-      const element = L.DomUtil.create('div', 'leaflet-bar carto-config-warning');
-      element.innerHTML = 'CARTO tile URL not configured';
-      return element;
-    };
-    warning.addTo(realMap);
+    fullmapContext.strokeStyle = 'rgba(88,228,239,.46)';
+    fullmapContext.lineWidth = 1.5;
+    fullmapContext.setLineDash([10, 9]);
+    fullmapContext.beginPath();
+    fullmapContext.moveTo(road.x1 * scale, road.z1 * scale);
+    fullmapContext.lineTo(road.x2 * scale, road.z2 * scale);
+    fullmapContext.stroke();
+    fullmapContext.setLineDash([]);
   }
 
-  const playerIcon = L.divIcon({
-    className: 'gps-marker',
-    html: '<div></div>',
-    iconSize: [18, 18],
-    iconAnchor: [9, 9]
-  });
-
-  realPlayerMarker = L.marker(realMapLocations.gandhipuram, {
-    icon: playerIcon,
-    zIndexOffset: 1000
-  }).addTo(realMap).bindTooltip('Live position', { permanent: false });
-
   SECTOR_1_DATA.landmarks.forEach((landmark) => {
-    const position = realMapLocations[landmark.id];
-    if (!position) return;
-    L.circleMarker(position, {
-      radius: 6,
-      color: landmark.color,
-      fillColor: landmark.color,
-      fillOpacity: 0.9,
-      weight: 2
-    }).addTo(realMap).bindPopup(`<b>${landmark.name}</b>`);
+    const x = landmark.x * scale;
+    const z = landmark.z * scale;
+    fullmapContext.beginPath();
+    fullmapContext.fillStyle = `${landmark.color}22`;
+    fullmapContext.arc(x, z, landmark.radius * scale, 0, Math.PI * 2);
+    fullmapContext.fill();
+
+    fullmapContext.beginPath();
+    fullmapContext.fillStyle = landmark.color;
+    fullmapContext.arc(x, z, 7, 0, Math.PI * 2);
+    fullmapContext.fill();
+
+    fullmapContext.fillStyle = '#edf6f8';
+    fullmapContext.font = '10px monospace';
+    fullmapContext.fillText(landmark.name, x + 11, z - 9);
   });
+  fullmapContext.restore();
 
-  L.rectangle([[10.35, 76.40], [11.25, 77.25]], {
-    color: '#58e4ef',
-    weight: 2,
-    fillOpacity: 0.05,
-    dashArray: '8 6'
-  }).addTo(realMap);
-}
+  fullmapContext.save();
+  fullmapContext.translate(width / 2, height / 2);
+  fullmapContext.rotate(-player.rotation.y);
+  fullmapContext.beginPath();
+  fullmapContext.fillStyle = '#f6dd62';
+  fullmapContext.moveTo(0, -13);
+  fullmapContext.lineTo(9, 10);
+  fullmapContext.lineTo(0, 6);
+  fullmapContext.lineTo(-9, 10);
+  fullmapContext.closePath();
+  fullmapContext.fill();
+  fullmapContext.restore();
 
-function refreshRealMap() {
-  if (!realMap) return;
-  realMap.invalidateSize();
+  fullmapContext.fillStyle = 'rgba(9,21,34,.82)';
+  fullmapContext.fillRect(18, 18, 190, 34);
+  fullmapContext.fillStyle = '#58e4ef';
+  fullmapContext.font = '600 12px monospace';
+  fullmapContext.fillText('SECTOR 1 • CENTRAL COIMBATORE', 30, 39);
 }
 
 const keys = new Set();
@@ -246,7 +279,7 @@ window.addEventListener('keydown', (event) => {
   if (event.code === 'KeyM') toggleMap();
   if (event.code === 'Escape') closeMap();
   if (event.code === 'KeyN') scene.fog.color.set(document.body.dataset.neon === 'true' ? 0x0b1320 : 0x061020);
-  if (event.code === 'KeyF') document.querySelector('#mode-label').textContent = 'WALKING • CENTRAL COIMBATORE';
+  if (event.code === 'KeyF') togglePlayerMode();
   if (event.code === 'KeyP' && !document.fullscreenElement) document.documentElement.requestFullscreen?.();
 });
 window.addEventListener('keyup', (event) => keys.delete(event.code));
@@ -254,10 +287,7 @@ window.addEventListener('keyup', (event) => keys.delete(event.code));
 function toggleMap() {
   const overlay = document.querySelector('#map-overlay');
   overlay.classList.toggle('open');
-  if (overlay.classList.contains('open')) {
-    initializeRealMap();
-    requestAnimationFrame(refreshRealMap);
-  }
+  if (overlay.classList.contains('open')) drawFullmap();
 }
 
 function closeMap() {
@@ -267,6 +297,7 @@ function closeMap() {
 document.querySelector('#minimap-click').addEventListener('click', toggleMap);
 document.querySelector('#btn-map').addEventListener('click', toggleMap);
 document.querySelector('#btn-close-map').addEventListener('click', closeMap);
+document.querySelector('#btn-mode').addEventListener('click', togglePlayerMode);
 document.querySelector('#btn-neon').addEventListener('click', () => {
   document.body.dataset.neon = document.body.dataset.neon === 'true' ? 'false' : 'true';
   scene.fog.color.set(document.body.dataset.neon === 'true' ? 0x08111f : 0x0b1320);
@@ -278,6 +309,25 @@ document.querySelector('#btn-fs').addEventListener('click', () => {
 
 let lastTime = performance.now();
 let speed = 0;
+
+function togglePlayerMode() {
+  const activePosition = player.position.clone();
+  const activeRotation = player.rotation.y;
+  playerMode = playerMode === 'car' ? 'character' : 'car';
+  car.visible = playerMode === 'car';
+  character.visible = playerMode === 'character';
+  player = playerMode === 'car' ? car : character;
+  player.position.copy(activePosition);
+  player.rotation.y = activeRotation;
+  speed = 0;
+  document.querySelector('#mode-label').textContent = playerMode === 'car'
+    ? 'KM/H • SPORTS COUPE'
+    : 'ON FOOT • CENTRAL COIMBATORE';
+  document.querySelector('#btn-mode').textContent = playerMode === 'car'
+    ? '🚶 Exit Car [F]'
+    : '🚗 Enter Car [F]';
+}
+
 function animate(now) {
   const delta = Math.min((now - lastTime) / 1000, 0.05);
   lastTime = now;
@@ -290,7 +340,11 @@ function animate(now) {
   if (left) player.rotation.y += 1.25 * delta;
   if (right) player.rotation.y -= 1.25 * delta;
 
-  const targetSpeed = forward ? 150 : backward ? -75 : 0;
+  const targetSpeed = forward
+    ? (playerMode === 'car' ? 150 : 38)
+    : backward
+      ? (playerMode === 'car' ? -75 : -22)
+      : 0;
   speed += (targetSpeed - speed) * Math.min(delta * 3, 1);
   player.position.x += Math.sin(player.rotation.y) * speed * delta;
   player.position.z += Math.cos(player.rotation.y) * speed * delta;
@@ -300,12 +354,21 @@ function animate(now) {
   camera.lookAt(player.position.x, 10, player.position.z);
 
   document.querySelector('#speed-val').textContent = Math.round(Math.abs(speed));
-  drawMinimap();
-  if (realPlayerMarker && realMap) {
-    const latitude = 10.9980 + player.position.z * -0.000018;
-    const longitude = 76.9610 + player.position.x * 0.000018;
-    realPlayerMarker.setLatLng([latitude, longitude]);
+
+  let nearestLandmark = null;
+  let nearestDistance = Infinity;
+  for (const landmark of SECTOR_1_DATA.landmarks) {
+    const distance = Math.hypot(player.position.x - landmark.x, player.position.z - landmark.z);
+    if (distance < nearestDistance) {
+      nearestDistance = distance;
+      nearestLandmark = landmark;
+    }
   }
+  document.querySelector('#zone-name').textContent = nearestDistance < 180
+    ? `📍 ${nearestLandmark.name}`
+    : '📍 Central Coimbatore';
+
+  drawMinimap();
   renderer.render(scene, camera);
   requestAnimationFrame(animate);
 }
