@@ -203,6 +203,177 @@ function drawMinimap() {
 
 const fullmapCanvas = document.querySelector('#fullmap-canvas');
 const fullmapContext = fullmapCanvas.getContext('2d');
+const OVERPASS_CACHE_KEY = 'cbe-overpass-sector1-v1';
+const COIMBATORE_BOUNDS = { south: 10.930, west: 76.880, north: 11.090, east: 77.040 };
+let overpassData = null;
+let overpassStatus = 'loading';
+let overpassSceneBuilt = false;
+
+function projectMapPoint(latitude, longitude) {
+  const padding = 42;
+  const usableWidth = fullmapCanvas.width - padding * 2;
+  const usableHeight = fullmapCanvas.height - padding * 2;
+  const x = padding + ((longitude - COIMBATORE_BOUNDS.west) / (COIMBATORE_BOUNDS.east - COIMBATORE_BOUNDS.west)) * usableWidth;
+  const y = padding + ((COIMBATORE_BOUNDS.north - latitude) / (COIMBATORE_BOUNDS.north - COIMBATORE_BOUNDS.south)) * usableHeight;
+  return [x, y];
+}
+
+function projectGamePoint(latitude, longitude) {
+  const centerLatitude = 11.010;
+  const centerLongitude = 76.960;
+  const metersPerDegreeLatitude = 111320;
+  const metersPerDegreeLongitude = 111320 * Math.cos(centerLatitude * Math.PI / 180);
+  const scale = 0.085;
+  return {
+    x: (longitude - centerLongitude) * metersPerDegreeLongitude * scale,
+    z: (centerLatitude - latitude) * metersPerDegreeLatitude * scale
+  };
+}
+
+function buildOverpassScene() {
+  if (overpassSceneBuilt || !overpassData?.elements) return;
+  overpassSceneBuilt = true;
+
+  const highwayMaterial = new THREE.MeshStandardMaterial({
+    color: 0x263a43,
+    roughness: 0.82,
+    metalness: 0.08
+  });
+  const laneMaterial = new THREE.MeshBasicMaterial({
+    color: 0x58e4ef,
+    transparent: true,
+    opacity: 0.48
+  });
+
+  overpassData.elements
+    .filter((element) => element.type === 'way' && element.tags?.highway && element.geometry?.length > 1)
+    .slice(0, 260)
+    .forEach((road) => {
+      const highway = road.tags.highway;
+      const major = ['motorway', 'trunk', 'primary', 'secondary'].includes(highway);
+      const points = road.geometry.map((point) => {
+        const projected = projectGamePoint(point.lat, point.lon);
+        return new THREE.Vector3(projected.x, 2.5, projected.z);
+      });
+
+      const curve = new THREE.CatmullRomCurve3(points);
+      const roadWidth = major ? 19 : 8;
+      const mesh = new THREE.Mesh(
+        new THREE.TubeGeometry(curve, Math.max(3, points.length * 2), roadWidth / 2, 5, false),
+        highwayMaterial
+      );
+      mesh.position.y = 0.2;
+      mesh.receiveShadow = true;
+      scene.add(mesh);
+
+      if (major) {
+        const lane = new THREE.Mesh(
+          new THREE.TubeGeometry(curve, Math.max(3, points.length * 2), 0.7, 4, false),
+          laneMaterial
+        );
+        lane.position.y = 2.9;
+        scene.add(lane);
+      }
+    });
+
+  const buildingMaterial = new THREE.MeshStandardMaterial({
+    color: 0x34434a,
+    roughness: 0.78,
+    metalness: 0.05
+  });
+  const roofMaterial = new THREE.MeshStandardMaterial({
+    color: 0x596b73,
+    roughness: 0.7
+  });
+
+  overpassData.elements
+    .filter((element) => element.type === 'way' && element.tags?.building && element.geometry?.length > 2)
+    .slice(0, 180)
+    .forEach((building) => {
+      const shape = new THREE.Shape();
+      building.geometry.forEach((point, index) => {
+        const projected = projectGamePoint(point.lat, point.lon);
+        if (index === 0) shape.moveTo(projected.x, projected.z);
+        else shape.lineTo(projected.x, projected.z);
+      });
+
+      const parsedHeight = Number.parseFloat(building.tags['building:levels'] || building.tags.height);
+      const height = Number.isFinite(parsedHeight)
+        ? Math.min(180, parsedHeight * (building.tags.height ? 1 : 8))
+        : 24 + (building.geometry.length % 5) * 9;
+
+      const mesh = new THREE.Mesh(
+        new THREE.ExtrudeGeometry(shape, { depth: height, bevelEnabled: false }),
+        buildingMaterial
+      );
+      mesh.rotation.x = -Math.PI / 2;
+      mesh.position.y = 2;
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      scene.add(mesh);
+
+      const bounds = new THREE.Box3().setFromObject(mesh);
+      if (!bounds.isEmpty()) {
+        const size = bounds.getSize(new THREE.Vector3());
+        const roof = new THREE.Mesh(
+          new THREE.BoxGeometry(Math.max(4, size.x * 0.7), 2, Math.max(4, size.z * 0.7)),
+          roofMaterial
+        );
+        roof.position.set((bounds.min.x + bounds.max.x) / 2, bounds.max.y + 1, (bounds.min.z + bounds.max.z) / 2);
+        roof.castShadow = true;
+        scene.add(roof);
+      }
+    });
+}
+
+async function loadOverpassMap() {
+  const cached = localStorage.getItem(OVERPASS_CACHE_KEY);
+  if (cached) {
+    try {
+      overpassData = JSON.parse(cached);
+      overpassStatus = 'cached';
+      buildOverpassScene();
+    } catch (_) {
+      localStorage.removeItem(OVERPASS_CACHE_KEY);
+    }
+  }
+
+  const query = `[out:json][timeout:25];
+    (
+      way["highway"](${COIMBATORE_BOUNDS.south},${COIMBATORE_BOUNDS.west},${COIMBATORE_BOUNDS.north},${COIMBATORE_BOUNDS.east});
+      way["building"](${COIMBATORE_BOUNDS.south},${COIMBATORE_BOUNDS.west},${COIMBATORE_BOUNDS.north},${COIMBATORE_BOUNDS.east});
+      relation["type"="boundary"]["boundary"="administrative"]["name"~"Coimbatore"](${COIMBATORE_BOUNDS.south},${COIMBATORE_BOUNDS.west},${COIMBATORE_BOUNDS.north},${COIMBATORE_BOUNDS.east});
+    );
+    out geom;`;
+
+  const endpoints = [
+    'https://overpass-api.de/api/interpreter',
+    'https://overpass.kumi.systems/api/interpreter'
+  ];
+
+  for (const endpoint of endpoints) {
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+        body: new URLSearchParams({ data: query })
+      });
+      if (!response.ok) throw new Error(`Overpass returned ${response.status}`);
+      const data = await response.json();
+      overpassData = data;
+      overpassStatus = 'live';
+      localStorage.setItem(OVERPASS_CACHE_KEY, JSON.stringify(data));
+      buildOverpassScene();
+      if (document.querySelector('#map-overlay').classList.contains('open')) drawFullmap();
+      return;
+    } catch (_) {
+      // Try the next public Overpass endpoint.
+    }
+  }
+
+  overpassStatus = overpassData ? 'cached' : 'fallback';
+  if (document.querySelector('#map-overlay').classList.contains('open')) drawFullmap();
+}
 
 function drawFullmap() {
   const width = fullmapCanvas.width;
@@ -253,6 +424,44 @@ function drawFullmap() {
   });
   fullmapContext.restore();
 
+  if (overpassData?.elements) {
+    const elements = overpassData.elements;
+
+    elements.filter((element) => element.type === 'way' && element.tags?.building && element.geometry)
+      .forEach((building) => {
+        if (building.geometry.length < 3) return;
+        fullmapContext.beginPath();
+        building.geometry.forEach((point, index) => {
+          const [x, y] = projectMapPoint(point.lat, point.lon);
+          if (index === 0) fullmapContext.moveTo(x, y);
+          else fullmapContext.lineTo(x, y);
+        });
+        fullmapContext.closePath();
+        fullmapContext.fillStyle = 'rgba(140, 166, 180, 0.10)';
+        fullmapContext.fill();
+        fullmapContext.strokeStyle = 'rgba(140, 166, 180, 0.16)';
+        fullmapContext.lineWidth = 1;
+        fullmapContext.stroke();
+      });
+
+    elements.filter((element) => element.type === 'way' && element.tags?.highway && element.geometry)
+      .forEach((road) => {
+        const rank = road.tags.highway;
+        const motorway = ['motorway', 'trunk', 'primary'].includes(rank);
+        fullmapContext.beginPath();
+        road.geometry.forEach((point, index) => {
+          const [x, y] = projectMapPoint(point.lat, point.lon);
+          if (index === 0) fullmapContext.moveTo(x, y);
+          else fullmapContext.lineTo(x, y);
+        });
+        fullmapContext.strokeStyle = motorway ? '#58e4ef' : '#7a8b98';
+        fullmapContext.lineWidth = motorway ? 3 : 1.4;
+        fullmapContext.globalAlpha = motorway ? 0.72 : 0.38;
+        fullmapContext.stroke();
+        fullmapContext.globalAlpha = 1;
+      });
+  }
+
   fullmapContext.save();
   fullmapContext.translate(width / 2, height / 2);
   fullmapContext.rotate(-player.rotation.y);
@@ -271,6 +480,12 @@ function drawFullmap() {
   fullmapContext.fillStyle = '#58e4ef';
   fullmapContext.font = '600 12px monospace';
   fullmapContext.fillText('SECTOR 1 • CENTRAL COIMBATORE', 30, 39);
+
+  fullmapContext.fillStyle = 'rgba(9,21,34,.82)';
+  fullmapContext.fillRect(18, 576, 230, 28);
+  fullmapContext.fillStyle = overpassStatus === 'live' ? '#39ff14' : overpassStatus === 'cached' ? '#f6dd62' : '#ff9100';
+  fullmapContext.font = '600 10px monospace';
+  fullmapContext.fillText(`OVERPASS • ${overpassStatus.toUpperCase()}`, 30, 594);
 }
 
 const keys = new Set();
@@ -287,7 +502,10 @@ window.addEventListener('keyup', (event) => keys.delete(event.code));
 function toggleMap() {
   const overlay = document.querySelector('#map-overlay');
   overlay.classList.toggle('open');
-  if (overlay.classList.contains('open')) drawFullmap();
+  if (overlay.classList.contains('open')) {
+    drawFullmap();
+    if (!overpassData) loadOverpassMap();
+  }
 }
 
 function closeMap() {
@@ -378,6 +596,8 @@ window.addEventListener('resize', () => {
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
+
+loadOverpassMap();
 
 const toast = document.querySelector('#toast');
 toast.classList.add('visible');
